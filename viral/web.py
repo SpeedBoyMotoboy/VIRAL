@@ -163,11 +163,10 @@ def api_suggest():
 @app.post("/api/suggest-ai")
 def api_suggest_ai():
     v = (request.get_json(force=True) or {}).get("video") or {}
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not key:
-        return jsonify({"error": "Sem ANTHROPIC_API_KEY. Use o botão 'Copiar prompt' e cole no Claude."}), 400
+    if not suggest.ai_available():
+        return jsonify({"error": "Sem chave de IA (GEMINI_API_KEY). Use 'Copiar prompt' e cole no Claude."}), 400
     try:
-        return jsonify({"text": suggest.ai_kit(v, key)})
+        return jsonify({"text": suggest.ai_generate(v)})
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": f"Falha na IA: {e}"}), 502
 

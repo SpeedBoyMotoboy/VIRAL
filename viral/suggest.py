@@ -116,5 +116,36 @@ def ai_kit(v: dict, api_key: str, model: str = "claude-haiku-5-5") -> str:
     return "".join(b.get("text", "") for b in data.get("content", []))
 
 
+def gemini_kit(v: dict, api_key: str, model: str = "") -> str:
+    """Gera o kit com o Gemini (tem plano grátis: chave em aistudio.google.com/apikey)."""
+    model = model or os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-flash-lite"
+    body = json.dumps({"contents": [{"parts": [{"text": build_prompt(v)}]}]}).encode()
+    req = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", data=body,
+        headers={"x-goog-api-key": api_key, "content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = json.load(r)
+    parts = (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+    return "".join(p.get("text", "") for p in parts)
+
+
+def ai_provider() -> str:
+    """'gemini' (grátis) tem prioridade; depois 'anthropic'; '' se nenhuma chave."""
+    if os.environ.get("GEMINI_API_KEY", "").strip():
+        return "gemini"
+    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        return "anthropic"
+    return ""
+
+
 def ai_available() -> bool:
-    return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+    return bool(ai_provider())
+
+
+def ai_generate(v: dict) -> str:
+    prov = ai_provider()
+    if prov == "gemini":
+        return gemini_kit(v, os.environ["GEMINI_API_KEY"].strip())
+    if prov == "anthropic":
+        return ai_kit(v, os.environ["ANTHROPIC_API_KEY"].strip())
+    raise RuntimeError("Sem chave de IA configurada.")

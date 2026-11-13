@@ -224,3 +224,30 @@ def test_kit_de_postagem(monkeypatch):
     assert c.post("/api/suggest", json={"video": {}}).status_code == 400
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     assert c.post("/api/suggest-ai", json={"video": v}).status_code == 400
+
+
+def test_ia_gemini_e_prioridade(monkeypatch):
+    import io, json as J
+    from viral import suggest as G
+
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert G.ai_provider() == "" and not G.ai_available()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "a")
+    assert G.ai_provider() == "anthropic"
+    monkeypatch.setenv("GEMINI_API_KEY", "g")
+    assert G.ai_provider() == "gemini"          # grátis tem prioridade
+
+    seen = {}
+
+    class Resp(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, timeout=0):
+        seen["url"], seen["key"] = req.full_url, req.get_header("X-goog-api-key")
+        return Resp(J.dumps({"candidates": [{"content": {"parts": [{"text": "T1\n"}, {"text": "T2"}]}}]}).encode())
+
+    monkeypatch.setattr(G.urllib.request, "urlopen", fake_urlopen)
+    out = G.ai_generate({"title": "x"})
+    assert out == "T1\nT2" and "gemini-2.5-flash-lite:generateContent" in seen["url"] and seen["key"] == "g"

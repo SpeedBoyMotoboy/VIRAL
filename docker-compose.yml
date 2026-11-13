@@ -1,0 +1,12 @@
+services:
+  viral:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      VIRAL_USER: ${VIRAL_USER:?defina VIRAL_USER no arquivo .env}
+      VIRAL_PASS: ${VIRAL_PASS:?defina VIRAL_PASS no arquivo .env}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+    volumes:
+      - ./downloads:/data/downloads

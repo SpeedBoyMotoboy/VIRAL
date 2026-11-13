@@ -1,6 +1,7 @@
 """Interface web (Flask). Rode:  python -m viral.web  e abra http://127.0.0.1:5000"""
 from __future__ import annotations
 
+import hmac
 import os
 import threading
 import time
@@ -9,7 +10,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory
 
 from . import config
 from .filters import SearchFilters
@@ -18,6 +19,22 @@ from .search import SearchError, analyze_links, search
 
 app = Flask(__name__)
 pool = ThreadPoolExecutor(max_workers=3)
+
+# Login opcional (HTTP Basic). Ativo só se VIRAL_USER e VIRAL_PASS estiverem definidos,
+# ex.: na VPS, onde o app fica exposto na internet.
+_AUTH_USER = os.environ.get("VIRAL_USER", "").strip()
+_AUTH_PASS = os.environ.get("VIRAL_PASS", "").strip()
+
+
+@app.before_request
+def _exigir_login():
+    if not (_AUTH_USER and _AUTH_PASS):
+        return None
+    auth = request.authorization
+    if auth and hmac.compare_digest(auth.username or "", _AUTH_USER) \
+            and hmac.compare_digest(auth.password or "", _AUTH_PASS):
+        return None
+    return Response("Login necessário.", 401, {"WWW-Authenticate": 'Basic realm="VIRAL"'})
 JOBS: dict[str, dict] = {}
 LOCK = threading.Lock()
 

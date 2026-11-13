@@ -97,6 +97,7 @@ details summary{cursor:pointer;color:var(--muted);margin:6px 0 10px}
       <label>Categoria<select name="category"><option value="">Todas</option>{% for k,v in categories.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
       <label>Estilo<select name="style">{% for k,v in styles.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
       <label>Formato<select name="format">{% for k,v in formats.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+      <label>Orientação<select name="orientation">{% for k,v in orientations.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
       <label>Ordenar por<select name="sort">{% for k,v in sorts.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
       <label>Mín. visualizações<input name="min_views" type="number" min="0" placeholder="0" list="nums"></label>
       <label>Mín. curtidas<input name="min_likes" type="number" min="0" placeholder="0" list="nums"></label>

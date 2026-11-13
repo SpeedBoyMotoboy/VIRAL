@@ -75,6 +75,7 @@ def index():
         categories={k: v[0] for k, v in config.CATEGORIES.items()},
         styles={k: v[0] for k, v in config.STYLES.items()},
         formats={k: v[0] for k, v in config.FORMATS.items()},
+        orientations=config.ORIENTATIONS,
         sorts=config.SORTS,
         languages=config.LANGUAGES,
         regions=config.REGIONS,

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields
 from datetime import datetime, timezone
 
-from .config import CATEGORIES, FORMATS, PERIODS, STYLES
+from .config import CATEGORIES, FORMATS, ORIENTATIONS, PERIODS, STYLES
 from .lang import matches_language
 from .models import Video
 
@@ -30,6 +30,7 @@ class SearchFilters:
     category: str = ""           # id de CATEGORIES
     style: str = ""              # chave de STYLES
     format: str = ""             # chave de FORMATS
+    orientation: str = ""        # vertical | horizontal | "" (qualquer)
     min_views: int = 0
     min_likes: int = 0
     min_comments: int = 0
@@ -54,6 +55,7 @@ class SearchFilters:
         f.category = str(f.category or "") if str(f.category or "") in CATEGORIES else ""
         f.style = f.style if f.style in STYLES else ""
         f.format = f.format if f.format in FORMATS else ""
+        f.orientation = f.orientation if f.orientation in ORIENTATIONS else ""
         f.min_views, f.min_likes, f.min_comments = _int(f.min_views), _int(f.min_likes), _int(f.min_comments)
         f.max_channel_followers = _int(f.max_channel_followers)
         f.min_engagement = _float(f.min_engagement)
@@ -92,6 +94,8 @@ def passes(v: Video, f: SearchFilters) -> tuple[bool, str]:
             return False, "duração"
         if dmax is not None and v.duration > dmax:
             return False, "duração"
+    if f.orientation and v.orientation and v.orientation != f.orientation:
+        return False, "outra orientação"
     if (v.views or 0) < f.min_views:
         return False, "poucas views"
     if (v.likes or 0) < f.min_likes:

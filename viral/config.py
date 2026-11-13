@@ -72,6 +72,13 @@ FORMATS: dict[str, tuple[str, int | None, int | None, int | None]] = {
     "longo": ("Longo (mais de 20 min)", 1200, None, 2),
 }
 
+# Orientação do vídeo
+ORIENTATIONS: dict[str, str] = {
+    "": "Qualquer orientação",
+    "vertical": "Vertical (Shorts / Reels / TikTok)",
+    "horizontal": "Horizontal (tela deitada)",
+}
+
 # Ordenação dos resultados
 SORTS: dict[str, str] = {
     "viral": "Score viral (views por hora)",

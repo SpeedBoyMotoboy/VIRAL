@@ -205,7 +205,40 @@ def _id_pages(f: SearchFilters, key: str, progress: Progress):
                 return
 
 
-def _enrich(ids: list[str], key: str) -> list[Video]:
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):  # noqa: D401 - devolve o redirecionamento como erro
+        return None
+
+
+def detect_orientation(videos: list[Video]) -> None:
+    """Marca vertical/horizontal. Truque: youtube.com/shorts/ID abre direto só se for Short (vertical);
+    se não for, redireciona para /watch. Vídeo com mais de 3 min não é Short -> horizontal."""
+    opener = urllib.request.build_opener(_NoRedirect)
+
+    def one(v: Video) -> None:
+        if v.orientation:
+            return
+        if v.duration and v.duration > 180:
+            v.orientation = "horizontal"
+            return
+        req = urllib.request.Request(f"https://www.youtube.com/shorts/{v.id}", method="HEAD",
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            code, loc = opener.open(req, timeout=10).status, ""
+        except urllib.error.HTTPError as e:
+            code, loc = e.code, e.headers.get("Location", "")
+        except Exception:  # noqa: BLE001 - sem rede: deixa desconhecida
+            return
+        if code == 200:
+            v.orientation = "vertical"
+        elif code in (301, 302, 303, 307, 308) and "/watch" in loc:
+            v.orientation = "horizontal"
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        list(pool.map(one, videos))
+
+
+def _enrich(ids: list[str], key: str, orientation: bool = False) -> list[Video]:
     names = {k: v[0] for k, v in CATEGORIES.items()}
     videos: list[Video] = []
     by_channel: dict[str, list[Video]] = {}
@@ -225,6 +258,8 @@ def _enrich(ids: list[str], key: str) -> list[Video]:
             for v in by_channel.get(item["id"], []):
                 v.channel_followers = int(subs) if subs else None
                 v.channel_country = country
+    if orientation:
+        detect_orientation(videos)
     return videos
 
 
@@ -238,7 +273,7 @@ def search_api(f: SearchFilters, key: str, progress: Progress | None = None, eno
     for n, page in enumerate(_id_pages(f, key, progress), start=1):
         new = [i for i in dict.fromkeys(page) if i not in seen]
         seen.update(new)
-        videos += _enrich(new, key)
+        videos += _enrich(new, key, bool(f.orientation))
         progress(f"Página {n}: {len(videos)} vídeos lidos…")
         if (enough and enough(videos)) or n >= max_pages:
             break

@@ -105,6 +105,7 @@ class Video:
     language: str = ""
     detected_language: str = ""
     channel_country: str = ""
+    orientation: str = ""  # vertical | horizontal | "" (desconhecida)
     license: str = ""
     downloadable: bool = True
     availability: str = ""
@@ -210,6 +211,7 @@ class Video:
             category=cats[0] if cats else "",
             tags=list(info.get("tags") or []),
             language=info.get("language") or "",
+            orientation=("vertical" if info["height"] > info["width"] else "horizontal") if info.get("width") and info.get("height") else "",
             license=info.get("license") or "",
             downloadable=downloadable,
             availability=availability or live,

@@ -178,3 +178,29 @@ def test_busca_api_pagina_ate_ter_o_suficiente(monkeypatch):
     f = SearchFilters.from_dict({"query": "x", "period": "all", "language": "pt", "region": "BR", "max_results": 30})
     r = S.search(f, api_key="k")
     assert len(r["videos"]) == 30 and calls["search"] == 2  # precisou da 2ª página
+
+
+def test_orientacao_filtra_e_detecta(monkeypatch):
+    from viral import search as S
+
+    def mk(i, o, dur=30):
+        return Video(id=f"o{i}", url="u", title=f"v{i}", published_at=NOW, duration=dur, views=10, orientation=o).finalize()
+
+    vs = [mk(1, "vertical"), mk(2, "horizontal"), mk(3, "")]
+    f = SearchFilters.from_dict({"period": "all", "orientation": "vertical", "sort": "views"})
+    kept, rej = apply_filters(vs, f)
+    assert sorted(v.id for v in kept) == ["o1", "o3"] and rej == {"outra orientação": 1}  # desconhecida não é escondida
+
+    # detecção: >3min = horizontal sem chamar a rede; short = 200; vídeo comum = 303 p/ /watch
+    class R:  # resposta falsa
+        status = 200
+
+    def fake_open(self, req, timeout=0):
+        if req.full_url.endswith("/shorts/o8"):
+            return R()
+        raise S.urllib.error.HTTPError(req.full_url, 303, "x", {"Location": "https://www.youtube.com/watch?v=o9"}, None)
+
+    monkeypatch.setattr(S.urllib.request.OpenerDirector, "open", fake_open)
+    ds = [mk(7, "", dur=600), mk(8, ""), mk(9, "")]
+    S.detect_orientation(ds)
+    assert [v.orientation for v in ds] == ["horizontal", "vertical", "horizontal"]

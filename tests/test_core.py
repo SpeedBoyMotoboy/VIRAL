@@ -204,3 +204,23 @@ def test_orientacao_filtra_e_detecta(monkeypatch):
     ds = [mk(7, "", dur=600), mk(8, ""), mk(9, "")]
     S.detect_orientation(ds)
     assert [v.orientation for v in ds] == ["horizontal", "vertical", "horizontal"]
+
+
+def test_kit_de_postagem(monkeypatch):
+    from viral import suggest as G
+
+    monkeypatch.setattr(G, "to_portuguese", lambda t: t)  # sem internet
+    v = {"title": "NEYMAR CHEGOU AO AVIÃO 😱 #shorts", "description": "d", "hashtags": ["#neymar"],
+         "keywords": ["futebol", "copa do mundo", "seleção"], "duration": 20, "url": "https://youtu.be/x",
+         "source": '"t" por canal (youtube) — https://youtu.be/x', "views": 1, "likes": 1, "comments": 1}
+    k = G.build_kit(v)
+    assert k["titles"][0] == "Neymar chegou ao avião"          # limpo, sem gritaria/emoji/hashtag
+    assert len(k["titles"]) >= 5 and all(len(t) <= 100 for t in k["titles"])
+    assert "#neymar" in k["hashtags"] and "#shorts" in k["hashtags"] and "#copadomundo" not in k["hashtags"]
+    assert "Crédito:" in k["description"] and "Neymar chegou ao avião" in k["prompt"] or "NEYMAR" in k["prompt"]
+
+    from viral.web import app
+    c = app.test_client()
+    assert c.post("/api/suggest", json={"video": {}}).status_code == 400
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert c.post("/api/suggest-ai", json={"video": v}).status_code == 400

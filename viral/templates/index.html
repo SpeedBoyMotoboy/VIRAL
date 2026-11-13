@@ -153,6 +153,12 @@ details summary{cursor:pointer;color:var(--muted);margin:6px 0 10px}
 </section>
 </main>
 
+<dialog id="kitDialog" style="max-width:720px;width:92vw">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h3>✍️ Sugestões para postar</h3><button class="btn sec sm" id="kitClose">Fechar</button></div>
+  <div class="meta" id="kitOrig"></div>
+  <div id="kitBody" style="display:grid;gap:10px;margin-top:10px"></div>
+</dialog>
+
 <dialog id="dlDialog">
   <form method="dialog" class="dl-grid" id="dlForm">
     <h3>Baixar <span id="dlCountTitle"></span></h3>
@@ -246,6 +252,7 @@ function card(v, i, selectable){
         <button class="btn sec sm" data-a="kw">Palavras-chave</button>
         <button class="btn sec sm" data-a="title">Título</button>
         <button class="btn sec sm" data-a="desc">Descrição</button>
+        <button class="btn sm" data-a="kit">✍️ Sugestões p/ postar</button>
       </div>
     </div>`;
   el.querySelector('[data-a=dl]').onclick = () => openDl([v]);
@@ -254,6 +261,7 @@ function card(v, i, selectable){
   el.querySelector('[data-a=kw]').onclick = () => copy(v.keywords.join(', '));
   el.querySelector('[data-a=title]').onclick = () => copy(v.title);
   el.querySelector('[data-a=desc]').onclick = () => copy(v.description || '');
+  el.querySelector('[data-a=kit]').onclick = () => openKit(v);
   const pick = el.querySelector('.pick');
   if (pick) pick.onchange = () => { pick.checked ? selected.add(v.id) : selected.delete(v.id); el.classList.toggle('sel', pick.checked); $('#dlSel').disabled = !selected.size; $('#dlSel').textContent = `Baixar selecionados (${selected.size})`; };
   return el;
@@ -318,6 +326,28 @@ async function refreshQuota(){
   } catch (e) {}
 }
 refreshQuota(); setInterval(refreshQuota, 15000);
+
+const kitBox = (title, text, extra='') => `<div class="job"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>${esc(title)}</b>
+  <button class="btn sec sm" data-copy="${esc(text)}">Copiar</button></div><div style="white-space:pre-wrap;margin-top:6px">${esc(text)}</div>${extra}</div>`;
+document.addEventListener('click', e => { const b = e.target.closest('[data-copy]'); if (b) copy(b.dataset.copy); });
+$('#kitClose').onclick = () => $('#kitDialog').close();
+async function openKit(v){
+  $('#kitOrig').textContent = v.title; $('#kitBody').innerHTML = '<div class="meta">Gerando…</div>'; $('#kitDialog').showModal();
+  try {
+    const k = await post('/api/suggest', {video: v});
+    const ai = k.ai_available ? '<button class="btn sm" id="kitAi">🤖 Gerar com IA agora</button>' : '';
+    $('#kitBody').innerHTML =
+      k.titles.map((t,i) => kitBox('Título ' + (i+1), t)).join('') +
+      kitBox('Descrição', k.description) + kitBox('Hashtags', k.hashtags.join(' ')) +
+      kitBox('Palavras-chave (tags)', k.keywords) + kitBox('Comentário fixado', k.pinned_comment) +
+      kitBox('Fonte / crédito', k.credit) +
+      `<div class="job"><b>Quer ainda melhor?</b><div class="meta">Copie o prompt e cole no Claude: ele cria títulos e descrições originais.</div>
+        <div style="display:flex;gap:8px;margin-top:6px"><button class="btn sm" data-copy="${esc(k.prompt)}">Copiar prompt p/ Claude</button>${ai}</div><div id="kitAiOut"></div></div>`;
+    const b = $('#kitAi'); if (b) b.onclick = async () => { b.disabled = true; b.textContent = 'Gerando…';
+      try { const r = await post('/api/suggest-ai', {video: v}); $('#kitAiOut').innerHTML = kitBox('Resposta da IA', r.text); } catch (err) { toast(err.message); }
+      b.disabled = false; b.textContent = '🤖 Gerar com IA agora'; };
+  } catch (err) { $('#kitBody').innerHTML = '<div class="warn">' + esc(err.message) + '</div>'; }
+}
 
 let jobTimer = null;
 async function refreshJobs(){

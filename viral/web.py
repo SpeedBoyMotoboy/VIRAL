@@ -18,6 +18,7 @@ from . import config, quota
 from .filters import SearchFilters
 from .media import QUALITIES, download
 from .search import SearchError, analyze_links, search
+from . import suggest
 
 app = Flask(__name__)
 pool = ThreadPoolExecutor(max_workers=3)
@@ -146,6 +147,29 @@ def api_jobs():
     jobs = sorted(JOBS.values(), key=lambda j: j["created"], reverse=True)
     return jsonify([{k: j[k] for k in ("id", "kind", "label", "status", "message", "percent", "error")}
                     | {"result": j["result"] if j["kind"] == "download" else None} for j in jobs if j["kind"] == "download"])
+
+
+@app.post("/api/suggest")
+def api_suggest():
+    d = request.get_json(force=True) or {}
+    v = d.get("video") or {}
+    if not v.get("title"):
+        return jsonify({"error": "Vídeo inválido."}), 400
+    kit = suggest.build_kit(v)
+    kit["ai_available"] = suggest.ai_available()
+    return jsonify(kit)
+
+
+@app.post("/api/suggest-ai")
+def api_suggest_ai():
+    v = (request.get_json(force=True) or {}).get("video") or {}
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        return jsonify({"error": "Sem ANTHROPIC_API_KEY. Use o botão 'Copiar prompt' e cole no Claude."}), 400
+    try:
+        return jsonify({"text": suggest.ai_kit(v, key)})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"error": f"Falha na IA: {e}"}), 502
 
 
 @app.get("/api/quota")

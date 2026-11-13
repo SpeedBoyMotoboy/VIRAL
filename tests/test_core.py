@@ -104,3 +104,77 @@ def test_translate_batches_and_fallback():
 
     out = translate_cues(cues, bad)
     assert [c.text for c in out] == [f"LINE {i} X" for i in range(5)]
+
+
+# ---- idioma / país -----------------------------------------------------------
+from viral.lang import matches_language
+
+
+def lv(title, desc="", lang="", country=""):
+    return Video(id=str(abs(hash(title))), url="u", title=title, description=desc, language=lang,
+                 channel_country=country, published_at=NOW, duration=30, views=1000).finalize()
+
+
+def test_idioma_portugues_aceita_e_rejeita():
+    pt = lv("Você sabia que o coração do beija-flor bate muito rápido?", "Curiosidades incríveis sobre os animais do Brasil")
+    es = lv("¿Sabías que el corazón del colibrí late muy rápido?", "Datos curiosos increíbles sobre los animales")
+    en = lv("Did you know the hummingbird heart beats incredibly fast?", "Amazing facts about animals around the world")
+    assert matches_language(pt, "pt")[0]
+    assert not matches_language(es, "pt")[0]
+    assert not matches_language(en, "pt")[0]
+    assert matches_language(en, "en")[0]
+
+
+def test_idioma_declarado_e_sem_evidencia():
+    assert matches_language(lv("🔥🔥", lang="pt-BR"), "pt")[0]       # texto curto: vale o declarado
+    assert not matches_language(lv("🔥🔥", lang="es"), "pt")[0]
+    assert matches_language(lv("🔥🔥"), "pt")[0]                      # sem evidência: não esconde
+
+
+def test_filtro_aplica_idioma_e_pais():
+    vs = [lv("Você sabia que existem planetas feitos de diamante?", "fatos do espaço", country="BR"),
+          lv("¿Sabías que existen planetas hechos de diamante?", "datos del espacio", country="MX"),
+          lv("Você sabia que o mar é salgado por causa das rochas?", "ciência simples", country="PT"),
+          lv("Did you know there are planets made of diamond?", "space facts", country="US")]
+    f = SearchFilters.from_dict({"period": "all", "language": "pt", "region": "BR", "sort": "views"})
+    kept, rej = apply_filters(vs, f)
+    assert [v.channel_country for v in kept] == ["BR"]
+    assert rej.get("outro idioma") == 2 and rej.get("canal de outro país") == 1
+
+
+def test_busca_api_pagina_ate_ter_o_suficiente(monkeypatch):
+    """Simula a API: páginas de 50 ids, 1 em cada 3 em português. Deve parar quando juntar 10 em PT."""
+    from viral import search as S
+
+    calls = {"search": 0}
+    pt = "Você sabia que isso acontece todos os dias no Brasil inteiro?"
+    es = "¿Sabías que esto sucede todos los días en todo el país?"
+
+    def fake_api(endpoint, key, **p):
+        if endpoint == "search":
+            calls["search"] += 1
+            n = calls["search"]
+            items = [{"id": {"videoId": f"p{n}_{i}"}} for i in range(50)]
+            return {"items": items, "nextPageToken": "x"}
+        if endpoint == "videos":
+            items = []
+            for vid in p["id"].split(","):
+                i = int(vid.split("_")[1])
+                items.append({"id": vid, "snippet": {"title": pt if i % 3 == 0 else es, "description": "", "channelId": "c" + vid,
+                                                     "publishedAt": NOW.isoformat(), "categoryId": "24"},
+                              "statistics": {"viewCount": "1000"}, "contentDetails": {"duration": "PT30S"}, "status": {"privacyStatus": "public"}})
+            return {"items": items}
+        if endpoint == "channels":
+            return {"items": [{"id": c, "snippet": {"country": "BR"}, "statistics": {"subscriberCount": "100"}} for c in p["id"].split(",")]}
+
+    monkeypatch.setattr(S, "_api", fake_api)
+    f = SearchFilters.from_dict({"query": "x", "period": "all", "language": "pt", "region": "BR", "max_results": 10})
+    r = S.search(f, api_key="k")
+    assert len(r["videos"]) == 10
+    assert all(v["detected_language"] == "pt" for v in r["videos"])
+    assert calls["search"] == 1  # 50 ids -> ~17 em PT, já bastava
+
+    calls["search"] = 0
+    f = SearchFilters.from_dict({"query": "x", "period": "all", "language": "pt", "region": "BR", "max_results": 30})
+    r = S.search(f, api_key="k")
+    assert len(r["videos"]) == 30 and calls["search"] == 2  # precisou da 2ª página

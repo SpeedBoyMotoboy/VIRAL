@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
 from .config import CATEGORIES, FORMATS, PERIODS, YOUTUBE_API_KEY
+from . import quota
 from .filters import SearchFilters, apply_filters
 from .models import Video
 
@@ -154,12 +155,16 @@ def _api(endpoint: str, key: str, **params) -> dict:
     url = API + endpoint + "?" + urllib.parse.urlencode(params)
     try:
         with urllib.request.urlopen(url, timeout=20) as r:
-            return json.load(r)
+            data = json.load(r)
+            quota.add(endpoint)
+            return data
     except urllib.error.HTTPError as e:
         try:
             msg = json.load(e)["error"]["message"]
         except Exception:
             msg = str(e)
+        if "quota" in msg.lower():
+            msg = "a cota diária grátis da API acabou. Renova de madrugada (~5h, horário de Brasília)."
         raise SearchError(f"API do YouTube: {msg}") from e
 
 
@@ -168,44 +173,42 @@ def _chunks(seq, n):
         yield seq[i : i + n]
 
 
-def search_api(f: SearchFilters, key: str, progress: Progress | None = None) -> list[Video]:
-    progress = progress or (lambda m: None)
-    ids: list[str] = []
-    after = f.published_after
-    trending = not f.full_query
-    if trending:
+def _id_pages(f: SearchFilters, key: str, progress: Progress):
+    """Gera listas de até 50 ids por página (a API cobra por chamada, não por item)."""
+    token = None
+    if not f.full_query:
         progress("Buscando vídeos em alta (sem palavra-chave)…")
-        token = None
-        while len(ids) < f.max_results:
+        while True:
             r = _api("videos", key, part="id", chart="mostPopular", regionCode=f.region or "BR",
                      videoCategoryId=f.category, maxResults=50, pageToken=token)
-            ids += [i["id"] for i in r.get("items", [])]
+            yield [i["id"] for i in r.get("items", [])]
             token = r.get("nextPageToken")
             if not token:
-                break
+                return
     else:
         progress(f"Buscando na API do YouTube: “{f.full_query}”…")
+        after = f.published_after
         order = {"recent": "date"}.get(f.sort, "viewCount")
         dur = {"shorts": "short", "curto": "short", "medio": "medium", "longo": "long"}.get(f.format)
-        token = None
-        while len(ids) < f.max_results:
+        while True:
             r = _api(
                 "search", key, part="id", type="video", q=f.full_query, order=order,
-                maxResults=min(50, f.max_results - len(ids)), pageToken=token,
+                maxResults=50, pageToken=token,
                 publishedAfter=after.strftime("%Y-%m-%dT%H:%M:%SZ") if after else None,
                 videoCategoryId=f.category, regionCode=f.region, relevanceLanguage=f.language,
                 videoDuration=dur, videoLicense="creativeCommon" if f.only_creative_commons else None,
                 videoCaption="closedCaption" if f.with_subtitles else None,
             )
-            ids += [i["id"]["videoId"] for i in r.get("items", []) if i.get("id", {}).get("videoId")]
+            yield [i["id"]["videoId"] for i in r.get("items", []) if i.get("id", {}).get("videoId")]
             token = r.get("nextPageToken")
             if not token:
-                break
-    ids = list(dict.fromkeys(ids))[: f.max_results]
-    progress(f"{len(ids)} vídeos encontrados, lendo estatísticas…")
+                return
+
+
+def _enrich(ids: list[str], key: str) -> list[Video]:
     names = {k: v[0] for k, v in CATEGORIES.items()}
     videos: list[Video] = []
-    channel_ids: dict[str, list[Video]] = {}
+    by_channel: dict[str, list[Video]] = {}
     for chunk in _chunks(ids, 50):
         r = _api("videos", key, part="snippet,statistics,contentDetails,status", id=",".join(chunk), maxResults=50)
         for item in r.get("items", []):
@@ -213,13 +216,32 @@ def search_api(f: SearchFilters, key: str, progress: Progress | None = None) -> 
             videos.append(v)
             cid = item["snippet"].get("channelId")
             if cid:
-                channel_ids.setdefault(cid, []).append(v)
-    for chunk in _chunks(list(channel_ids), 50):
-        r = _api("channels", key, part="statistics", id=",".join(chunk), maxResults=50)
+                by_channel.setdefault(cid, []).append(v)
+    for chunk in _chunks(list(by_channel), 50):
+        r = _api("channels", key, part="snippet,statistics", id=",".join(chunk), maxResults=50)
         for item in r.get("items", []):
             subs = item.get("statistics", {}).get("subscriberCount")
-            for v in channel_ids.get(item["id"], []):
+            country = item.get("snippet", {}).get("country", "")
+            for v in by_channel.get(item["id"], []):
                 v.channel_followers = int(subs) if subs else None
+                v.channel_country = country
+    return videos
+
+
+def search_api(f: SearchFilters, key: str, progress: Progress | None = None, enough=None) -> list[Video]:
+    """Lê páginas de 50 até `enough(videos)` ficar verdadeiro (ou até 4 páginas)."""
+    progress = progress or (lambda m: None)
+    base = -(-f.max_results // 50)
+    max_pages = min(4, base * 3)
+    seen: set[str] = set()
+    videos: list[Video] = []
+    for n, page in enumerate(_id_pages(f, key, progress), start=1):
+        new = [i for i in dict.fromkeys(page) if i not in seen]
+        seen.update(new)
+        videos += _enrich(new, key)
+        progress(f"Página {n}: {len(videos)} vídeos lidos…")
+        if (enough and enough(videos)) or n >= max_pages:
+            break
     return videos
 
 
@@ -227,12 +249,13 @@ def search_api(f: SearchFilters, key: str, progress: Progress | None = None) -> 
 def search(f: SearchFilters, progress: Progress | None = None, api_key: str | None = None) -> dict:
     key = YOUTUBE_API_KEY if api_key is None else api_key
     if key:
-        videos = search_api(f, key, progress)
+        videos = search_api(f, key, progress, lambda vs: len(apply_filters(vs, f)[0]) >= f.max_results)
         engine = "YouTube Data API"
     else:
         videos = search_ytdlp(_effective_query(f), progress)
         engine = "yt-dlp"
     kept, rejected = apply_filters(videos, f)
+    kept = kept[: f.max_results]
     return {
         "engine": engine,
         "query": f.full_query,

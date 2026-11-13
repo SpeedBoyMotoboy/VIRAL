@@ -74,7 +74,7 @@ details summary{cursor:pointer;color:var(--muted);margin:6px 0 10px}
 <body>
 <header>
   <h1>VIRAL<span>.</span></h1>
-  <span class="engine">motor: {{ engine }}</span>
+  <span class="engine">motor: {{ engine }}<span id="quotaInfo"></span></span>
   <nav>
     <button data-tab="search" class="on">🔥 Buscar virais</button>
     <button data-tab="links">🔗 Analisar links</button>
@@ -110,7 +110,7 @@ details summary{cursor:pointer;color:var(--muted);margin:6px 0 10px}
         <label>Idioma<select name="language"><option value="">Qualquer</option>{% for k,v in languages.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
         <label>Canal com no máx. (inscritos)<input name="max_channel_followers" type="number" min="0" placeholder="sem limite"></label>
         <label>Excluir palavras (vírgula)<input name="exclude_words" placeholder="ex.: live, ao vivo"></label>
-        <label>Quantos vídeos analisar<select name="max_results"><option>15</option><option selected>30</option><option>50</option><option>100</option><option>200</option></select></label>
+        <label>Quantos vídeos mostrar<select name="max_results"><option>15</option><option selected>30</option><option>50</option><option>100</option><option>200</option></select></label>
         <label class="chk"><input type="checkbox" name="only_downloadable"> Só baixáveis</label>
         <label class="chk"><input type="checkbox" name="with_subtitles"> Só com legenda</label>
         <label class="chk"><input type="checkbox" name="only_creative_commons"> Só Creative Commons (livre p/ reuso)</label>
@@ -144,6 +144,10 @@ details summary{cursor:pointer;color:var(--muted);margin:6px 0 10px}
 
 <!-- ============ DOWNLOADS ============ -->
 <section id="tab-downloads" class="hidden">
+  <div class="toolbar">
+    <span class="meta">📁 Os vídeos ficam em: <b>{{ download_dir }}</b></span><span class="sp"></span>
+    <button class="btn sec sm" id="openRoot">Abrir pasta de downloads</button>
+  </div>
   <div id="jobs"><div class="empty">Nenhum download ainda.</div></div>
 </section>
 </main>
@@ -304,6 +308,16 @@ $('#dlDialog').addEventListener('close', async () => {
   refreshJobs();
 });
 
+async function openFolder(path){ try { await post('/api/open-folder', {path}); } catch (err) { toast(err.message); } }
+$('#openRoot').onclick = () => openFolder('');
+document.addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) openFolder(b.dataset.open); });
+async function refreshQuota(){
+  try { const q = await (await fetch('/api/quota')).json();
+    $('#quotaInfo').textContent = {{ 'true' if has_api else 'false' }} ? ` · cota hoje: ${q.used}/${q.limit} (≈${q.searches_left} buscas)` : '';
+  } catch (e) {}
+}
+refreshQuota(); setInterval(refreshQuota, 15000);
+
 let jobTimer = null;
 async function refreshJobs(){
   clearTimeout(jobTimer);
@@ -318,7 +332,7 @@ async function refreshJobs(){
     return `<div class="job ${j.status}"><b>${esc(j.label)}</b>
       <div class="bar"><i style="width:${j.percent ?? (j.status==='running'?5:100)}%"></i></div>
       <div class="meta">${j.status === 'error' ? '<span class="warn">Erro: '+esc(j.error)+'</span>' : esc(j.message)}</div>
-      ${warns}${files ? `<div class="files">📁 ${esc(j.result.folder)}<br>${files}</div>` : ''}</div>`;
+      ${warns}${files ? `<div class="files">📁 ${esc(j.result.folder)} <button class="btn sec sm" data-open="${esc(j.result.folder)}">Abrir pasta</button><br>${files}</div>` : ''}</div>`;
   }).join('');
   if (running) jobTimer = setTimeout(refreshJobs, 1000);
 }

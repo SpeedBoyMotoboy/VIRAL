@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hmac
 import os
+import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -12,7 +14,7 @@ from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory
 
-from . import config
+from . import config, quota
 from .filters import SearchFilters
 from .media import QUALITIES, download
 from .search import SearchError, analyze_links, search
@@ -78,6 +80,8 @@ def index():
         regions=config.REGIONS,
         qualities=QUALITIES,
         engine="YouTube Data API" if config.YOUTUBE_API_KEY else "yt-dlp (sem chave de API)",
+        download_dir=str(config.DOWNLOAD_DIR),
+        has_api=bool(config.YOUTUBE_API_KEY),
     )
 
 
@@ -141,6 +145,32 @@ def api_jobs():
     jobs = sorted(JOBS.values(), key=lambda j: j["created"], reverse=True)
     return jsonify([{k: j[k] for k in ("id", "kind", "label", "status", "message", "percent", "error")}
                     | {"result": j["result"] if j["kind"] == "download" else None} for j in jobs if j["kind"] == "download"])
+
+
+@app.get("/api/quota")
+def api_quota():
+    return jsonify(quota.status())
+
+
+@app.post("/api/open-folder")
+def api_open_folder():
+    """Abre a pasta no Explorer/Finder. Só vale no próprio computador (acesso local)."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return jsonify({"error": "Só funciona no computador onde o VIRAL está rodando."}), 403
+    rel = str((request.get_json(force=True) or {}).get("path", "")).strip()
+    base = config.DOWNLOAD_DIR
+    target = (base / rel).resolve() if rel else base
+    if not (target == base or target.is_relative_to(base)) or not target.exists():
+        return jsonify({"error": "Pasta não encontrada."}), 404
+    if target.is_file():
+        target = target.parent
+    if sys.platform.startswith("win"):
+        os.startfile(str(target))  # noqa: S606 - caminho validado acima
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(target)])
+    else:
+        subprocess.Popen(["xdg-open", str(target)])
+    return jsonify({"ok": True, "path": str(target)})
 
 
 @app.get("/files/<path:path>")

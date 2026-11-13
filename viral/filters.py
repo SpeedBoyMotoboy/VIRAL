@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, fields
 from datetime import datetime, timezone
 
 from .config import CATEGORIES, FORMATS, PERIODS, STYLES
+from .lang import matches_language
 from .models import Video
 
 
@@ -107,6 +108,12 @@ def passes(v: Video, f: SearchFilters) -> tuple[bool, str]:
         return False, "não é Creative Commons"
     if f.with_subtitles and not (v.subtitles or v.auto_subtitles):
         return False, "sem legenda"
+    if f.language:
+        ok, _ = matches_language(v, f.language)
+        if not ok:
+            return False, "outro idioma"
+    if f.region and v.channel_country and v.channel_country.upper() != f.region.upper():
+        return False, "canal de outro país"
     if f.exclude_words:
         hay = f"{v.title} {v.description}".lower()
         if any(w.lower() in hay for w in f.exclude_words):

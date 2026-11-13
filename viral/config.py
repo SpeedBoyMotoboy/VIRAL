@@ -5,7 +5,13 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-DOWNLOAD_DIR = Path(os.environ.get("VIRAL_DOWNLOAD_DIR", Path.cwd() / "downloads")).resolve()
+def _default_download_dir() -> Path:
+    """Pasta 'Downloads\\VIRAL' do usuário (se existir Downloads); senão ./downloads."""
+    dl = Path.home() / "Downloads"
+    return dl / "VIRAL" if dl.is_dir() else Path.cwd() / "downloads"
+
+
+DOWNLOAD_DIR = Path(os.environ.get("VIRAL_DOWNLOAD_DIR") or _default_download_dir()).resolve()
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 
 # Período de postagem -> (rótulo, timedelta, código do filtro "upload date" da busca do YouTube)

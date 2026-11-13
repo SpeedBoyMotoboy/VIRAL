@@ -103,6 +103,8 @@ class Video:
     hashtags: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
     language: str = ""
+    detected_language: str = ""
+    channel_country: str = ""
     license: str = ""
     downloadable: bool = True
     availability: str = ""

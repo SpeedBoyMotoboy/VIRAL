@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIRAL — caçador de vídeos</title>
+<style>
+:root{--bg:#0e0f13;--panel:#171920;--panel2:#1f222b;--line:#2a2e3a;--text:#e9ebf1;--muted:#9097a8;--accent:#ff3b5c;--accent2:#ffb02e;--ok:#3ddc97;--err:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;flex-wrap:wrap}
+header h1{margin:0;font-size:20px;letter-spacing:.5px}header h1 span{color:var(--accent)}
+.engine{color:var(--muted);font-size:12px}
+nav{display:flex;gap:6px;margin-left:auto}
+nav button{background:none;border:1px solid var(--line);color:var(--muted);padding:7px 14px;border-radius:999px;cursor:pointer}
+nav button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+main{padding:18px 20px;max-width:1500px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+.grid-f{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 12px}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+input,select,textarea{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+.q{display:flex;gap:10px;margin-bottom:12px}.q input{font-size:16px;padding:11px 14px}
+.chk{flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:13px}.chk input{width:auto}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn.sec{background:var(--panel2);border:1px solid var(--line);color:var(--text);font-weight:500}
+.btn.sm{padding:6px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+.periods{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px}
+.periods button{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:999px;cursor:pointer}
+.periods button.on{background:var(--accent2);color:#111;border-color:var(--accent2);font-weight:600}
+.status{color:var(--muted);margin:8px 0;min-height:20px}
+.status.err{color:var(--err)}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.toolbar .sp{flex:1}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.card.sel{outline:2px solid var(--accent2)}
+.thumb{position:relative;aspect-ratio:16/9;background:#000}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.badge{position:absolute;background:rgba(0,0,0,.8);padding:2px 7px;border-radius:6px;font-size:12px}
+.dur{right:8px;bottom:8px}.rank{left:8px;top:8px;background:var(--accent);font-weight:700}
+.pick{position:absolute;right:8px;top:8px;width:20px;height:20px;accent-color:var(--accent2)}
+.body{padding:12px;display:flex;flex-direction:column;gap:8px;flex:1}
+.title{font-weight:600;font-size:15px;color:var(--text);text-decoration:none}
+.title:hover{color:var(--accent)}
+.meta{color:var(--muted);font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.stat{background:var(--panel2);border-radius:8px;padding:6px 8px}
+.stat b{display:block;font-size:14px}.stat small{color:var(--muted);font-size:11px}
+.stat.hot b{color:var(--accent2)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;max-height:58px;overflow:hidden}
+.chip{background:#2a1d24;color:#ff9fb1;padding:2px 7px;border-radius:999px;font-size:11px}
+.chip.k{background:#1d2530;color:#9cc7ff}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.empty{color:var(--muted);text-align:center;padding:40px}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:20px;width:min(460px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h3{margin:0 0 12px}
+.dl-grid{display:grid;gap:10px}
+.job{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.bar{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.job.done .bar i{background:var(--ok);width:100%}.job.error .bar i{background:var(--err);width:100%}
+.files a{color:#9cc7ff;margin-right:10px;font-size:12px;display:inline-block}
+.warn{color:var(--accent2);font-size:12px}
+.hidden{display:none!important}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ok);color:#111;padding:8px 16px;border-radius:999px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+details summary{cursor:pointer;color:var(--muted);margin:6px 0 10px}
+@media (max-width:600px){main{padding:12px}.q{flex-direction:column}nav{margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>VIRAL<span>.</span></h1>
+  <span class="engine">motor: {{ engine }}</span>
+  <nav>
+    <button data-tab="search" class="on">🔥 Buscar virais</button>
+    <button data-tab="links">🔗 Analisar links</button>
+    <button data-tab="downloads">⬇️ Downloads <span id="dlcount"></span></button>
+  </nav>
+</header>
+
+<main>
+<!-- ============ BUSCA ============ -->
+<section id="tab-search">
+  <form class="panel" id="searchForm">
+    <div class="q">
+      <input name="query" placeholder="Assunto ou palavras-chave (ex.: receita de bolo, curiosidades espaço, #fyp)…" autofocus>
+      <button class="btn" type="submit" id="searchBtn">Buscar</button>
+    </div>
+    <div class="periods" id="periods">
+      {% for k, v in periods.items() %}<button type="button" data-p="{{k}}" class="{{ 'on' if k=='1w' }}">{{ v }}</button>{% endfor %}
+    </div>
+    <div class="grid-f">
+      <label>Categoria<select name="category"><option value="">Todas</option>{% for k,v in categories.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+      <label>Estilo<select name="style">{% for k,v in styles.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+      <label>Formato<select name="format">{% for k,v in formats.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+      <label>Ordenar por<select name="sort">{% for k,v in sorts.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+      <label>Mín. visualizações<input name="min_views" type="number" min="0" placeholder="0" list="nums"></label>
+      <label>Mín. curtidas<input name="min_likes" type="number" min="0" placeholder="0" list="nums"></label>
+      <label>Mín. comentários<input name="min_comments" type="number" min="0" placeholder="0"></label>
+      <label>Mín. engajamento (%)<input name="min_engagement" type="number" min="0" step="0.1" placeholder="0"></label>
+    </div>
+    <details>
+      <summary>Mais filtros</summary>
+      <div class="grid-f">
+        <label>País<select name="region">{% for k,v in regions.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+        <label>Idioma<select name="language"><option value="">Qualquer</option>{% for k,v in languages.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+        <label>Canal com no máx. (inscritos)<input name="max_channel_followers" type="number" min="0" placeholder="sem limite"></label>
+        <label>Excluir palavras (vírgula)<input name="exclude_words" placeholder="ex.: live, ao vivo"></label>
+        <label>Quantos vídeos analisar<select name="max_results"><option>15</option><option selected>30</option><option>50</option><option>100</option><option>200</option></select></label>
+        <label class="chk"><input type="checkbox" name="only_downloadable"> Só baixáveis</label>
+        <label class="chk"><input type="checkbox" name="with_subtitles"> Só com legenda</label>
+        <label class="chk"><input type="checkbox" name="only_creative_commons"> Só Creative Commons (livre p/ reuso)</label>
+      </div>
+    </details>
+    <datalist id="nums"><option value="1000"><option value="10000"><option value="100000"><option value="1000000"></datalist>
+  </form>
+
+  <div class="status" id="searchStatus"></div>
+  <div class="toolbar hidden" id="resultsBar">
+    <span id="resultsInfo" class="meta"></span><span class="sp"></span>
+    <button class="btn sec sm" id="selAll">Selecionar todos</button>
+    <button class="btn sm" id="dlSel" disabled>Baixar selecionados</button>
+    <button class="btn sec sm" id="copyAllTags">Copiar hashtags (top)</button>
+    <button class="btn sec sm" data-export="csv">Exportar CSV</button>
+    <button class="btn sec sm" data-export="json">Exportar JSON</button>
+  </div>
+  <div class="cards" id="cards"></div>
+</section>
+
+<!-- ============ LINKS ============ -->
+<section id="tab-links" class="hidden">
+  <div class="panel">
+    <p class="meta" style="margin-top:0">Cole links do YouTube, TikTok, Instagram, Kwai, X/Twitter, Facebook, Vimeo… (um por linha). Você recebe fonte, hashtags, palavras-chave, métricas e as legendas disponíveis — e pode baixar.</p>
+    <textarea id="linksInput" rows="5" placeholder="https://www.tiktok.com/@perfil/video/...&#10;https://youtu.be/..."></textarea>
+    <div style="margin-top:10px"><button class="btn" id="linksBtn">Analisar</button></div>
+  </div>
+  <div class="status" id="linksStatus"></div>
+  <div class="cards" id="linkCards"></div>
+</section>
+
+<!-- ============ DOWNLOADS ============ -->
+<section id="tab-downloads" class="hidden">
+  <div id="jobs"><div class="empty">Nenhum download ainda.</div></div>
+</section>
+</main>
+
+<dialog id="dlDialog">
+  <form method="dialog" class="dl-grid" id="dlForm">
+    <h3>Baixar <span id="dlCountTitle"></span></h3>
+    <div class="meta" id="dlTitle"></div>
+    <label>Qualidade<select name="quality">{% for k,v in qualities.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+    <label class="chk"><input type="checkbox" name="subtitles" checked> Baixar legenda</label>
+    <label>Idioma da legenda<select name="sub_lang"><option value="">Original do vídeo</option>{% for k,v in languages.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}</select></label>
+    <label>Traduzir legenda e título para<select name="translate_to"><option value="">Não traduzir</option>{% for k,v in languages.items() %}<option value="{{k}}" {{ 'selected' if k=='pt' }}>{{v}}</option>{% endfor %}</select></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn sec" value="cancel">Cancelar</button>
+      <button class="btn" value="ok">Baixar</button>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, el=document) => el.querySelector(s), $$ = (s, el=document) => [...el.querySelectorAll(s)];
+let period = '1w', results = [], selected = new Set(), pendingDl = [], knownJobs = new Set(JSON.parse(localStorageGet('viralJobs') || '[]'));
+function localStorageGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function localStorageSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+// ---------- abas
+$$('nav button').forEach(b => b.onclick = () => {
+  $$('nav button').forEach(x => x.classList.toggle('on', x === b));
+  $$('main > section').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-' + b.dataset.tab));
+  if (b.dataset.tab === 'downloads') refreshJobs();
+});
+$$('#periods button').forEach(b => b.onclick = () => { period = b.dataset.p; $$('#periods button').forEach(x => x.classList.toggle('on', x === b)); });
+
+// ---------- util
+const fmt = n => n == null ? '—' : n >= 1e9 ? (n/1e9).toFixed(1)+'B' : n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(Math.round(n));
+const dur = s => { if (s == null) return ''; const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return (h ? h+':'+String(m).padStart(2,'0') : m) + ':' + String(x).padStart(2,'0'); };
+function ago(iso){ if(!iso) return 'data ?'; const s=(Date.now()-new Date(iso))/1000; const u=[[31536000,'ano','anos'],[2592000,'mês','meses'],[604800,'semana','semanas'],[86400,'dia','dias'],[3600,'hora','horas'],[60,'min','min']]; for(const [n,a,b] of u){ if(s>=n){const v=Math.floor(s/n); return 'há '+v+' '+(v>1?b:a);} } return 'agora'; }
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1600); }
+async function copy(text){ try{ await navigator.clipboard.writeText(text); }catch(e){ const a=document.createElement('textarea'); a.value=text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); } toast('Copiado!'); }
+async function post(url, body){ const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j = await r.json(); if(!r.ok) throw new Error(j.error||r.statusText); return j; }
+async function waitJob(id, onMsg){ for(;;){ const j = await (await fetch('/api/jobs/'+id)).json(); onMsg && onMsg(j); if(j.status!=='running') return j; await new Promise(r=>setTimeout(r,800)); } }
+
+// ---------- busca
+$('#searchForm').onsubmit = async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target), body = {period};
+  for (const [k,v] of fd) body[k] = v;
+  $$('#searchForm input[type=checkbox]').forEach(c => body[c.name] = c.checked);
+  const st = $('#searchStatus'); st.className = 'status'; st.textContent = 'Iniciando…';
+  $('#searchBtn').disabled = true; $('#cards').innerHTML = ''; $('#resultsBar').classList.add('hidden');
+  try {
+    const {job} = await post('/api/search', body);
+    const j = await waitJob(job, j => st.textContent = j.message);
+    if (j.status === 'error') throw new Error(j.error);
+    const r = j.result; results = r.videos; selected.clear();
+    const rej = Object.entries(r.rejected).map(([k,v]) => v+' '+k).join(', ');
+    st.textContent = '';
+    $('#resultsInfo').textContent = `${results.length} de ${r.analyzed} vídeos passaram nos filtros` + (rej ? ` (descartados: ${rej})` : '') + ` · motor: ${r.engine}`;
+    $('#resultsBar').classList.remove('hidden');
+    renderCards($('#cards'), results, true);
+  } catch (err) { st.className = 'status err'; st.textContent = '⚠️ ' + err.message; }
+  $('#searchBtn').disabled = false;
+};
+
+function card(v, i, selectable){
+  const el = document.createElement('div'); el.className = 'card';
+  if (v.error) { el.innerHTML = `<div class="body"><b>Erro</b><div class="meta">${esc(v.url)}</div><div class="warn">${esc(v.error)}</div></div>`; return el; }
+  const tags = v.hashtags.slice(0,12).map(h => `<span class="chip">${esc(h)}</span>`).join('');
+  const kws = v.keywords.slice(0,12).map(h => `<span class="chip k">${esc(h)}</span>`).join('');
+  const subs = (v.subtitles.length || v.auto_subtitles.length) ? `💬 legendas: ${esc(v.subtitles.slice(0,6).join(', ') || 'automáticas')}` : 'sem legenda';
+  el.innerHTML = `
+    <div class="thumb">${v.thumbnail ? `<img loading="lazy" src="${esc(v.thumbnail)}" alt="">` : ''}
+      ${selectable ? `<span class="badge rank">#${i+1}</span><input type="checkbox" class="pick" title="selecionar">` : ''}
+      ${v.duration ? `<span class="badge dur">${dur(v.duration)}</span>` : ''}</div>
+    <div class="body">
+      <a class="title" href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.title)}</a>
+      <div class="meta">${esc(v.channel)}${v.channel_followers ? ' · '+fmt(v.channel_followers)+' inscritos' : ''} · ${ago(v.published_at)} · ${esc(v.platform)}${v.category ? ' · '+esc(v.category) : ''}</div>
+      <div class="stats">
+        <div class="stat"><b>${fmt(v.views)}</b><small>views</small></div>
+        <div class="stat"><b>${fmt(v.likes)}</b><small>curtidas</small></div>
+        <div class="stat"><b>${fmt(v.comments)}</b><small>comentários</small></div>
+        <div class="stat"><b>${v.engagement ?? '—'}%</b><small>engajamento</small></div>
+        <div class="stat"><b>${fmt(v.views_per_hour)}</b><small>views/hora</small></div>
+        <div class="stat hot"><b>${fmt(v.viral_score)}</b><small>score viral</small></div>
+      </div>
+      ${tags ? `<div class="chips">${tags}</div>` : ''}
+      ${kws ? `<div class="chips">${kws}</div>` : ''}
+      <div class="meta">${subs}${v.license ? ' · '+esc(v.license) : ''}${v.downloadable ? '' : ' · <span class="warn">pode não ser baixável</span>'}</div>
+      <div class="actions">
+        <button class="btn sm" data-a="dl">⬇️ Baixar</button>
+        <button class="btn sec sm" data-a="src">Fonte</button>
+        <button class="btn sec sm" data-a="tags">#Hashtags</button>
+        <button class="btn sec sm" data-a="kw">Palavras-chave</button>
+        <button class="btn sec sm" data-a="title">Título</button>
+        <button class="btn sec sm" data-a="desc">Descrição</button>
+      </div>
+    </div>`;
+  el.querySelector('[data-a=dl]').onclick = () => openDl([v]);
+  el.querySelector('[data-a=src]').onclick = () => copy(v.source);
+  el.querySelector('[data-a=tags]').onclick = () => copy(v.hashtags.join(' ') || '(sem hashtags)');
+  el.querySelector('[data-a=kw]').onclick = () => copy(v.keywords.join(', '));
+  el.querySelector('[data-a=title]').onclick = () => copy(v.title);
+  el.querySelector('[data-a=desc]').onclick = () => copy(v.description || '');
+  const pick = el.querySelector('.pick');
+  if (pick) pick.onchange = () => { pick.checked ? selected.add(v.id) : selected.delete(v.id); el.classList.toggle('sel', pick.checked); $('#dlSel').disabled = !selected.size; $('#dlSel').textContent = `Baixar selecionados (${selected.size})`; };
+  return el;
+}
+function renderCards(root, list, selectable){
+  root.innerHTML = '';
+  if (!list.length) { root.innerHTML = '<div class="empty">Nenhum vídeo passou nos filtros. Tente afrouxar os mínimos ou aumentar o período.</div>'; return; }
+  list.forEach((v,i) => root.append(card(v,i,selectable)));
+}
+$('#selAll').onclick = () => { const all = selected.size !== results.length; $$('#cards .pick').forEach(p => { p.checked = all; p.onchange(); }); };
+$('#dlSel').onclick = () => openDl(results.filter(v => selected.has(v.id)));
+$('#copyAllTags').onclick = () => {
+  const c = {}; results.forEach(v => v.hashtags.forEach(h => { const k=h.toLowerCase(); c[k]=(c[k]||0)+1; }));
+  copy(Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,30).map(x=>x[0]).join(' ') || '(sem hashtags)');
+};
+$$('[data-export]').forEach(b => b.onclick = () => {
+  const type = b.dataset.export; let data, mime;
+  if (type === 'json') { data = JSON.stringify(results, null, 2); mime = 'application/json'; }
+  else {
+    const cols = ['title','url','channel','channel_followers','platform','published_at','duration','views','likes','comments','engagement','views_per_hour','viral_score','category','license','hashtags','keywords','source'];
+    const cell = x => '"' + String(Array.isArray(x) ? x.join(' ') : (x ?? '')).replace(/"/g,'""') + '"';
+    data = '﻿' + cols.join(';') + '\n' + results.map(v => cols.map(c => cell(v[c])).join(';')).join('\n'); mime = 'text/csv';
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data],{type:mime})); a.download = 'virais.' + type; a.click();
+});
+
+// ---------- links
+$('#linksBtn').onclick = async () => {
+  const st = $('#linksStatus'); st.className = 'status'; $('#linkCards').innerHTML = '';
+  try {
+    const {job} = await post('/api/links', {urls: $('#linksInput').value});
+    const j = await waitJob(job, j => st.textContent = j.message);
+    if (j.status === 'error') throw new Error(j.error);
+    st.textContent = ''; renderCards($('#linkCards'), j.result, false);
+  } catch (err) { st.className = 'status err'; st.textContent = '⚠️ ' + err.message; }
+};
+
+// ---------- download
+function openDl(list){
+  pendingDl = list; $('#dlCountTitle').textContent = list.length > 1 ? `(${list.length} vídeos)` : '';
+  $('#dlTitle').textContent = list.length === 1 ? list[0].title : list.map(v => v.title).slice(0,5).join(' · ') + (list.length > 5 ? '…' : '');
+  $('#dlDialog').showModal();
+}
+$('#dlDialog').addEventListener('close', async () => {
+  if ($('#dlDialog').returnValue !== 'ok') return;
+  const fd = new FormData($('#dlForm')), opts = Object.fromEntries(fd); opts.subtitles = $('#dlForm [name=subtitles]').checked;
+  for (const v of pendingDl) {
+    try { const {job} = await post('/api/download', {...opts, url: v.url, title: v.title}); knownJobs.add(job); }
+    catch (err) { toast('Erro: ' + err.message); }
+  }
+  localStorageSet('viralJobs', JSON.stringify([...knownJobs].slice(-200)));
+  toast(pendingDl.length > 1 ? `${pendingDl.length} downloads iniciados` : 'Download iniciado');
+  refreshJobs();
+});
+
+let jobTimer = null;
+async function refreshJobs(){
+  clearTimeout(jobTimer);
+  const jobs = await (await fetch('/api/jobs')).json();
+  const running = jobs.filter(j => j.status === 'running').length;
+  $('#dlcount').textContent = running ? `(${running})` : '';
+  const root = $('#jobs');
+  if (!jobs.length) root.innerHTML = '<div class="empty">Nenhum download ainda.</div>';
+  else root.innerHTML = jobs.map(j => {
+    const files = j.result ? j.result.files.map(f => `<a href="/files/${encodeURI(f)}" target="_blank">${esc(f.split('/').pop())}</a>`).join('') : '';
+    const warns = j.result ? j.result.warnings.map(w => `<div class="warn">⚠️ ${esc(w)}</div>`).join('') : '';
+    return `<div class="job ${j.status}"><b>${esc(j.label)}</b>
+      <div class="bar"><i style="width:${j.percent ?? (j.status==='running'?5:100)}%"></i></div>
+      <div class="meta">${j.status === 'error' ? '<span class="warn">Erro: '+esc(j.error)+'</span>' : esc(j.message)}</div>
+      ${warns}${files ? `<div class="files">📁 ${esc(j.result.folder)}<br>${files}</div>` : ''}</div>`;
+  }).join('');
+  if (running) jobTimer = setTimeout(refreshJobs, 1000);
+}
+refreshJobs();
+</script>
+</body>
+</html>
